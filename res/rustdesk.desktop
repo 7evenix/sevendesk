@@ -1,7 +1,7 @@
 [Desktop Entry]
-Name=RustDesk
+Name=SevenDesk
 GenericName=Remote Desktop
-Comment=Remote Desktop
+Comment=Assistenza remota Sevenix
 Exec=rustdesk %u
 Icon=rustdesk
 Terminal=false
