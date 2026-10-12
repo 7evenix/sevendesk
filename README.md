@@ -48,7 +48,9 @@ docker run --rm --user "$(id -u):$(id -g)" -v "$PWD/res/sevenix/icons":/tool:ro,
 ## Build
 
 `.github/workflows/sevendesk.yml` (manuale o al push di un tag `v*`, che crea la release):
-Windows completo e Supporto, Linux `.deb`, Android arm64, macOS x86_64/arm64 non firmato.
+Windows completo e Supporto, Linux `.deb`, Android arm64. macOS (x86_64/arm64, non firmato) solo
+lanciandolo a mano con `macos=true`: nel repo privato i minuti macOS contano 10×. I `.dmg`
+restano negli artifact del run, non nella release.
 
 ## Server
 
@@ -75,5 +77,6 @@ Dopo un merge, allinea `VERSION` in `sevendesk.yml` alla versione di `Cargo.toml
 ## Licenza
 
 AGPL-3.0, come RustDesk (vedi [LICENCE](LICENCE)). Copyright © Purslane Tech Pte. Ltd.
-per il codice originale; le modifiche sono di Sevenix. Chi riceve un binario SevenDesk
-può ottenerne il sorgente da questo repository.
+per il codice originale; le modifiche sono di Sevenix. Il repository è privato, ma chi riceve
+un binario SevenDesk (anche la variante Supporto) ha diritto al sorgente corrispondente: va
+fornito su richiesta a info@sevenix.it, come dice la schermata Informazioni.
