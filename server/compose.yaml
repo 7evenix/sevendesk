@@ -1,0 +1,28 @@
+# SevenDesk rendezvous (hbbs) and relay (hbbr) server.
+# Host networking so firewalld decides what is reachable: Docker's published
+# ports bypass firewalld. Public ports: 21115-21117/tcp, 21116/udp.
+# The key pair lives in the sevendesk-data volume; id_ed25519 must never leave
+# this server, id_ed25519.pub is compiled into the client (src/sevenix.rs).
+name: sevendesk-server
+
+services:
+  hbbs:
+    image: rustdesk/rustdesk-server:1.1.16
+    command: hbbs -r desk.sevenix.it:21117 -k _
+    network_mode: host
+    volumes:
+      - sevendesk-data:/root
+    depends_on:
+      - hbbr
+    restart: unless-stopped
+
+  hbbr:
+    image: rustdesk/rustdesk-server:1.1.16
+    command: hbbr -k _
+    network_mode: host
+    volumes:
+      - sevendesk-data:/root
+    restart: unless-stopped
+
+volumes:
+  sevendesk-data:
