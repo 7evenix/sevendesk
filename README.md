@@ -48,7 +48,7 @@ docker run --rm --user "$(id -u):$(id -g)" -v "$PWD/res/sevenix/icons":/tool:ro,
 ## Build
 
 `.github/workflows/sevendesk.yml` (manuale o al push di un tag `v*`, che crea la release):
-Windows completo e Supporto, Linux `.deb`, Android arm64. macOS (x86_64/arm64, non firmato) solo
+Windows completo e Supporto, Linux `.deb` e `.rpm` (`res/sevenix/rpm-flutter.spec`), Android arm64. macOS (x86_64/arm64, non firmato) solo
 lanciandolo a mano con `macos=true`: nel repo privato i minuti macOS contano 10×. I `.dmg`
 restano negli artifact del run, non nella release.
 
