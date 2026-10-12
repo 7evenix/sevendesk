@@ -28,6 +28,8 @@ for s in preinst postinst prerm postrm; do
     [ -f "DEBIAN/$s" ] && sed -i 's/rustdesk/sevendesk/g' "DEBIAN/$s"
 done
 sed -i 's/^Package: rustdesk$/Package: sevendesk/' DEBIAN/control
+# Lists the old paths; regenerated below.
+rm -f DEBIAN/md5sums
 grep -q '^Package: sevendesk$' DEBIAN/control
 
 if grep -rIl 'rustdesk' usr/share/applications DEBIAN usr/share/sevendesk/files; then
