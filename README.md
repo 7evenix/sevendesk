@@ -9,7 +9,7 @@ Assistenza remota di [Sevenix](https://sevenix.it).
 | Variante | Per chi | Build |
 | --- | --- | --- |
 | **SevenDesk** | staff Sevenix: controlla e può essere controllato | Windows, macOS, Linux, Android |
-| **SevenDesk Supporto** | clienti: accetta solo connessioni in entrata, si avvia senza installazione | Windows (`.exe` portabile), macOS (`.dmg`), Linux (`.tar.gz` portabile: si estrae e si lancia `./sevendesk`) |
+| **SevenDesk Supporto** | clienti: accetta solo connessioni in entrata, si avvia senza installazione | Windows (`.exe` portabile, o `.msi` che la installa), macOS (`.dmg`), Linux (`.tar.gz` portabile: si estrae e si lancia `./sevendesk`) |
 
 La variante si sceglie a compile time: `SEVENDESK_VARIANT=supporto` nell'ambiente di
 `cargo build` produce la build Supporto (`src/sevenix.rs`).
@@ -33,7 +33,7 @@ repo **privato** `7evenix/sevendesk-dist`: i binari contengono la chiave del ser
 è pubblico, quindi qui non si pubblicano, e gli artifact dei run scadono dopo un giorno. La release
 usa il secret `DIST_TOKEN`, un token fine-grained limitato a `sevendesk-dist`, Contents: read and
 write):
-Windows completo e Supporto, Linux `.deb` e `.rpm` (`res/sevenix/rpm-flutter.spec`), Android arm64,
+Windows completo e Supporto (`.exe` e `.msi`), Linux `.deb` e `.rpm` (`res/sevenix/rpm-flutter.spec`), Android arm64,
 macOS x86_64/arm64 non firmato.
 
 Host e chiave del server non sono nel sorgente: la CI li passa a `cargo` dalla variabile di
