@@ -11,7 +11,7 @@ server Sevenix `desk.sevenix.it`.
 | Variante | Per chi | Build |
 | --- | --- | --- |
 | **SevenDesk** | staff Sevenix: controlla e può essere controllato | Windows, macOS, Linux, Android |
-| **SevenDesk Supporto** | clienti: accetta solo connessioni in entrata, si avvia senza installazione | Windows |
+| **SevenDesk Supporto** | clienti: accetta solo connessioni in entrata, si avvia senza installazione | Windows (`.exe` portabile), macOS (`.dmg`), Linux (`.tar.gz` portabile: si estrae e si lancia `./sevendesk`) |
 
 La variante si sceglie a compile time: `SEVENDESK_VARIANT=supporto` nell'ambiente di
 `cargo build` produce la build Supporto (`src/sevenix.rs`).
