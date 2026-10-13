@@ -10,7 +10,7 @@ r square 32 res/32x32.png; r square 64 res/64x64.png; r square 128 res/128x128.p
 r black 60 res/mac-tray-dark-x2.png; r black 48 res/mac-tray-light-x2.png
 t=$(mktemp -d)
 for s in 16 24 32 48 64 128 256; do r square $s $t/$s.png; done
-magick $t/16.png $t/32.png $t/48.png $t/64.png $t/128.png res/icon.ico
+magick $t/16.png $t/32.png $t/48.png $t/64.png $t/128.png $t/256.png res/icon.ico
 magick $t/16.png $t/24.png $t/32.png $t/48.png $t/64.png $t/128.png $t/256.png flutter/windows/runner/resources/app_icon.ico
 magick $t/16.png $t/24.png $t/32.png res/tray-icon.ico
 for s in 16 32 48 128 256 512 1024; do r mac $s $t/m$s.png; done

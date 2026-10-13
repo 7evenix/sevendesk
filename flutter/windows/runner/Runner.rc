@@ -92,9 +92,9 @@ BEGIN
             VALUE "CompanyName", "Sevenix" "\0"
             VALUE "FileDescription", "SevenDesk" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "rustdesk" "\0"
+            VALUE "InternalName", "sevendesk" "\0"
             VALUE "LegalCopyright", "SevenDesk: Sevenix. Based on RustDesk, Copyright © 2026 Purslane Tech Pte. Ltd. AGPL-3.0." "\0"
-            VALUE "OriginalFilename", "rustdesk.exe" "\0"
+            VALUE "OriginalFilename", "sevendesk.exe" "\0"
             VALUE "ProductName", "SevenDesk" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END

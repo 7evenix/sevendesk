@@ -36,6 +36,11 @@ pub fn apply() {
         .write()
         .unwrap()
         .insert(keys::OPTION_REGISTER_DEVICE.to_owned(), "N".to_owned());
+    // "Powered by RustDesk" on the home page; the credit stays in About.
+    config::BUILTIN_SETTINGS
+        .write()
+        .unwrap()
+        .insert(keys::OPTION_HIDE_POWERED_BY_ME.to_owned(), "Y".to_owned());
     let mut hard = config::HARD_SETTINGS.write().unwrap();
     hard.insert("disable-account".to_owned(), "Y".to_owned());
     hard.insert("disable-ab".to_owned(), "Y".to_owned());
