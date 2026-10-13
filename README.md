@@ -47,7 +47,11 @@ docker run --rm --user "$(id -u):$(id -g)" -v "$PWD/res/sevenix/icons":/tool:ro,
 
 ## Build
 
-`.github/workflows/sevendesk.yml` (PR, manuale, o push di un tag `v*`, che crea la release):
+`.github/workflows/sevendesk.yml` (PR, manuale, o push di un tag `v*`, che crea la release nel
+repo **privato** `7evenix/sevendesk-dist`: i binari contengono la chiave del server e questo repo
+è pubblico, quindi qui non si pubblicano, e gli artifact dei run scadono dopo un giorno. La release
+usa il secret `DIST_TOKEN`, un token fine-grained limitato a `sevendesk-dist`, Contents: read and
+write):
 Windows completo e Supporto, Linux `.deb` e `.rpm` (`res/sevenix/rpm-flutter.spec`), Android arm64,
 macOS x86_64/arm64 non firmato.
 

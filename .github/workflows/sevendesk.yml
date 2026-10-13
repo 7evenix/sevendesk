@@ -7,7 +7,8 @@
 # flatpak/drm, iOS, web, F-Droid, SBOM, update metadata and every upload to
 # rustdesk infrastructure. Only optional secrets: the Android signing key.
 #
-# Outputs (attached to the GitHub release when a v* tag is pushed):
+# Outputs (released in the private 7evenix/sevendesk-dist when a v* tag is pushed;
+# run artifacts expire after a day, since they carry the server key):
 #   SevenDesk-<VERSION>-install.exe         Windows, full client (double-click installs)
 #   SevenDesk-Supporto-<VERSION>.exe        Windows, customer support client (runs portable)
 #   sevendesk-<VERSION>-x86_64.deb          Linux (package "sevendesk", repacked by res/sevenix/repack-deb.sh)
@@ -255,6 +256,8 @@ jobs:
           name: sevendesk-windows-x86_64-${{ matrix.variant }}
           path: ./SignOutput/*.exe
           if-no-files-found: error
+          # Carries the server key and the repository is public: keep it briefly.
+          retention-days: 1
 
   build-linux:
     name: linux x86_64 deb
@@ -461,6 +464,8 @@ jobs:
           name: sevendesk-linux-x86_64-deb
           path: sevendesk-${{ env.VERSION }}-x86_64.deb
           if-no-files-found: error
+          # Carries the server key and the repository is public: keep it briefly.
+          retention-days: 1
 
       - name: Upload rpm
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -468,6 +473,8 @@ jobs:
           name: sevendesk-linux-x86_64-rpm
           path: sevendesk-${{ env.VERSION }}-x86_64.rpm
           if-no-files-found: error
+          # Carries the server key and the repository is public: keep it briefly.
+          retention-days: 1
 
   build-android:
     name: android aarch64 apk
@@ -672,6 +679,8 @@ jobs:
           name: sevendesk-android-aarch64-apk
           path: dist/*.apk
           if-no-files-found: error
+          # Carries the server key and the repository is public: keep it briefly.
+          retention-days: 1
 
   build-macos:
     name: macos ${{ matrix.job.arch }}
@@ -831,14 +840,18 @@ jobs:
           name: sevendesk-macos-${{ matrix.job.arch }}-dmg
           path: SevenDesk-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg # can not upload the directory directly or tar.gz, which destroy the link structure
           if-no-files-found: error
+          # Carries the server key and the repository is public: keep it briefly.
+          retention-days: 1
 
+  # Published in the private repository 7evenix/sevendesk-dist, not here: the
+  # binaries carry the server key and this repository is public.
   release:
-    name: GitHub release
+    name: Release (sevendesk-dist)
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [build-windows, build-linux, build-android, build-macos]
     runs-on: ubuntu-24.04
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Download build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -864,12 +877,16 @@ jobs:
 
       - name: Create release
         env:
-          GH_TOKEN: ${{ github.token }}
+          # Fine-grained token limited to 7evenix/sevendesk-dist, Contents: read and write.
+          GH_TOKEN: ${{ secrets.DIST_TOKEN }}
+          DIST_REPO: 7evenix/sevendesk-dist
           TAG: ${{ github.ref_name }}
         run: |
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+          [ -n "$GH_TOKEN" ] || { echo "DIST_TOKEN not set"; exit 1; }
+          if gh release view "$TAG" --repo "$DIST_REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --repo "$DIST_REPO" --clobber
           else
-            gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" \
-              --verify-tag --title "SevenDesk $TAG" --generate-notes
+            gh release create "$TAG" dist/* --repo "$DIST_REPO" --target main \
+              --title "SevenDesk $TAG" \
+              --notes "Build di https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA (run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)."
           fi
