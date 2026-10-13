@@ -11,6 +11,7 @@
 #   SevenDesk-<VERSION>-install.exe         Windows, full client (double-click installs)
 #   SevenDesk-Supporto-<VERSION>.exe        Windows, customer support client (runs portable)
 #   sevendesk-<VERSION>-x86_64.deb          Linux (package "sevendesk", repacked by res/sevenix/repack-deb.sh)
+#   sevendesk-<VERSION>-x86_64.rpm          Linux Fedora/RHEL (res/sevenix/rpm-flutter.spec)
 #   SevenDesk-<VERSION>-aarch64[-signed].apk Android
 #   SevenDesk-<VERSION>-<arch>.dmg          macOS x86_64 / aarch64, unsigned: only on manual runs with macos=true, as run artifacts (not in the release)
 
@@ -448,11 +449,23 @@ jobs:
             sh ./res/sevenix/repack-deb.sh "rustdesk-${{ env.VERSION }}.deb" "sevendesk-${{ env.VERSION }}-${{ env.ARCH }}.deb"
             ls -l ./*.deb
 
+            # rpm (Fedora/RHEL), from the flutter bundle build.py left behind
+            HBB=`pwd` rpmbuild ./res/sevenix/rpm-flutter.spec -bb --define "sevendesk_version ${{ env.VERSION }}"
+            mv ~/rpmbuild/RPMS/${{ env.ARCH }}/sevendesk-*.rpm "/workspace/sevendesk-${{ env.VERSION }}-${{ env.ARCH }}.rpm"
+            ls -l ./*.rpm
+
       - name: Upload deb
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sevendesk-linux-x86_64-deb
           path: sevendesk-${{ env.VERSION }}-x86_64.deb
+          if-no-files-found: error
+
+      - name: Upload rpm
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sevendesk-linux-x86_64-rpm
+          path: sevendesk-${{ env.VERSION }}-x86_64.rpm
           if-no-files-found: error
 
   build-android:
