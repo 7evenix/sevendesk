@@ -255,12 +255,10 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3.0.0
 
-      - name: Build msi
-        # As upstream's flutter-build.yml. bash, not pwsh: the --custom-arp JSON
-        # keeps its quotes, and msbuild takes -p: (MSYS rewrites /p: as a path).
+      - name: Prepare msi
+        # As upstream's flutter-build.yml. bash so the --custom-arp JSON keeps
+        # its quotes; msbuild is only on PATH for pwsh (next step).
         shell: bash
-        env:
-          VARIANT: ${{ matrix.variant }}
         run: |
           pushd ./res/msi
           # The app name gives the installed exe, the service and the registry
@@ -273,16 +271,18 @@ jobs:
           # The upstream License.rtf is Purslane's privacy policy, which
           # preprocess.py has just rewritten with SevenDesk as the data controller.
           cp ../sevenix/License.rtf Package/License.rtf
+
+      - name: Build msi
+        env:
+          OUT: ${{ matrix.variant == 'supporto' && 'SevenDesk-Supporto' || 'SevenDesk' }}-${{ env.VERSION }}.msi
+        run: |
+          pushd ./res/msi
           nuget restore msi.sln
-          msbuild msi.sln -p:Configuration=Release -p:Platform=x64 -p:TargetVersion=Windows10
+          msbuild msi.sln -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
+          $msi = Get-ChildItem ./Package/bin/*/Release/en-us/Package.msi | Select-Object -First 1
+          mv $msi.FullName "../../SignOutput/$env:OUT"
           popd
-          if [ "$VARIANT" = "supporto" ]; then
-            out="SevenDesk-Supporto-${VERSION}.msi"
-          else
-            out="SevenDesk-${VERSION}.msi"
-          fi
-          mv ./res/msi/Package/bin/*/Release/en-us/Package.msi "./SignOutput/${out}"
-          sha256sum "./SignOutput/${out}"
+          Get-FileHash "./SignOutput/$env:OUT" -Algorithm SHA256
 
       - name: Upload Windows executable
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
