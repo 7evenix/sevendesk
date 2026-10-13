@@ -3,7 +3,7 @@
 # Derived from upstream's flutter-build.yml: the steps below are copied from its
 # Windows x64, Linux x86_64, Android aarch64 and macOS jobs, keeping the same
 # toolchain versions and pinned actions. Dropped: code signing (Windows),
-# notarization (macOS), MSI, sciter, arm64 Windows/Linux, rpm/arch/appimage/
+# notarization (macOS), MSI template, sciter, arm64 Windows/Linux, rpm/arch/appimage/
 # flatpak/drm, iOS, web, F-Droid, SBOM, update metadata and every upload to
 # rustdesk infrastructure. Only optional secrets: the Android signing key.
 #
@@ -11,6 +11,7 @@
 # run artifacts expire after a day, since they carry the server key):
 #   SevenDesk-<VERSION>-install.exe         Windows, full client (double-click installs)
 #   SevenDesk-Supporto-<VERSION>.exe        Windows, customer support client (runs portable)
+#   SevenDesk[-Supporto]-<VERSION>.msi      Windows installers of the two variants (res/msi)
 #   sevendesk-<VERSION>-x86_64.deb          Linux (package "sevendesk", repacked by res/sevenix/repack-deb.sh)
 #   sevendesk-<VERSION>-x86_64.rpm          Linux Fedora/RHEL (res/sevenix/rpm-flutter.spec)
 #   SevenDesk-<VERSION>-aarch64[-signed].apk Android
@@ -251,11 +252,45 @@ jobs:
           mv ./target/release/rustdesk-portable-packer.exe "./SignOutput/${out}"
           sha256sum "./SignOutput/${out}"
 
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3.0.0
+
+      - name: Prepare msi
+        # As upstream's flutter-build.yml. bash so the --custom-arp JSON keeps
+        # its quotes; msbuild is only on PATH for pwsh (next step).
+        shell: bash
+        run: |
+          pushd ./res/msi
+          # The app name gives the installed exe, the service and the registry
+          # keys, so both variants are "SevenDesk" and replace each other.
+          python3 preprocess.py --app-name SevenDesk -m Sevenix -d ../../rustdesk --custom-arp '{
+            "Contact": {"msi": "ARPCONTACT", "v": "https://sevenix.it"},
+            "HelpLink": {"msi": "ARPHELPLINK", "v": "https://sevenix.it"},
+            "ReadMe": {"msi": "ARPREADME", "v": "https://github.com/7evenix/sevendesk"}
+          }'
+          # The upstream License.rtf is Purslane's privacy policy, which
+          # preprocess.py has just rewritten with SevenDesk as the data controller.
+          cp ../sevenix/License.rtf Package/License.rtf
+
+      - name: Build msi
+        env:
+          OUT: ${{ matrix.variant == 'supporto' && 'SevenDesk-Supporto' || 'SevenDesk' }}-${{ env.VERSION }}.msi
+        run: |
+          pushd ./res/msi
+          nuget restore msi.sln
+          msbuild msi.sln -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
+          $msi = Get-ChildItem ./Package/bin/*/Release/en-us/Package.msi | Select-Object -First 1
+          mv $msi.FullName "../../SignOutput/$env:OUT"
+          popd
+          Get-FileHash "./SignOutput/$env:OUT" -Algorithm SHA256
+
       - name: Upload Windows executable
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sevendesk-windows-x86_64-${{ matrix.variant }}
-          path: ./SignOutput/*.exe
+          path: |
+            ./SignOutput/*.exe
+            ./SignOutput/*.msi
           if-no-files-found: error
           # Carries the server key and the repository is public: keep it briefly.
           retention-days: 1
