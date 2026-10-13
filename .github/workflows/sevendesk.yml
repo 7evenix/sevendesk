@@ -7,23 +7,20 @@
 # flatpak/drm, iOS, web, F-Droid, SBOM, update metadata and every upload to
 # rustdesk infrastructure. Only optional secrets: the Android signing key.
 #
-# Outputs (Windows, Linux and Android are attached to the GitHub release when a v* tag is pushed):
+# Outputs (released in the private 7evenix/sevendesk-dist when a v* tag is pushed;
+# run artifacts expire after a day, since they carry the server key):
 #   SevenDesk-<VERSION>-install.exe         Windows, full client (double-click installs)
 #   SevenDesk-Supporto-<VERSION>.exe        Windows, customer support client (runs portable)
 #   sevendesk-<VERSION>-x86_64.deb          Linux (package "sevendesk", repacked by res/sevenix/repack-deb.sh)
 #   sevendesk-<VERSION>-x86_64.rpm          Linux Fedora/RHEL (res/sevenix/rpm-flutter.spec)
 #   SevenDesk-<VERSION>-aarch64[-signed].apk Android
-#   SevenDesk-<VERSION>-<arch>.dmg          macOS x86_64 / aarch64, unsigned: only on manual runs with macos=true, as run artifacts (not in the release)
+#   SevenDesk-Supporto-<VERSION>-x86_64.tar.gz  Linux customer support client (portable)
+#   SevenDesk[-Supporto]-<VERSION>-<arch>.dmg   macOS x86_64 / aarch64, unsigned
 
 name: SevenDesk build
 
 on:
   workflow_dispatch:
-    inputs:
-      macos:
-        description: "Build macOS too (private repo: macOS minutes count 10x)"
-        type: boolean
-        default: false
   pull_request:
   push:
     tags:
@@ -45,6 +42,10 @@ env:
   VCPKG_COMMIT_ID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
   # Must match the version in Cargo.toml: build.py names its outputs after it.
   VERSION: "1.5.1"
+  # Sevenix server compiled into the client (src/sevenix.rs); kept out of the
+  # public source. Empty on forks, whose builds then use no Sevenix server.
+  SEVENDESK_SERVER: ${{ vars.SEVENDESK_SERVER }}
+  SEVENDESK_KEY: ${{ secrets.SEVENDESK_KEY }}
   NDK_VERSION: "r28c"
 
 jobs:
@@ -256,6 +257,8 @@ jobs:
           name: sevendesk-windows-x86_64-${{ matrix.variant }}
           path: ./SignOutput/*.exe
           if-no-files-found: error
+          # Carries the server key and the repository is public: keep it briefly.
+          retention-days: 1
 
   build-linux:
     name: linux x86_64 deb
@@ -361,6 +364,8 @@ jobs:
           dockerRunArgs: |
             --volume "${PWD}:/workspace"
             --volume "/opt/artifacts:/opt/artifacts"
+            --env SEVENDESK_SERVER
+            --env SEVENDESK_KEY
           shell: /bin/bash
           install: |
             apt-get update -y
@@ -422,6 +427,10 @@ jobs:
             # start build
             pushd /workspace
             export VCPKG_ROOT=/opt/artifacts/vcpkg
+            # Supporto library first: the normal build below then recompiles only
+            # the main crate (SEVENDESK_VARIANT is read with option_env!).
+            SEVENDESK_VARIANT=supporto cargo build --locked --lib --features hwcodec,flutter,unix-file-copy-paste --release
+            cp target/release/liblibrustdesk.so /workspace/librustdesk-supporto.so
             cargo build --locked --lib --features hwcodec,flutter,unix-file-copy-paste --release
             rm -rf target/release/deps target/release/build
             rm -rf ~/.cargo
@@ -454,12 +463,34 @@ jobs:
             mv ~/rpmbuild/RPMS/${{ env.ARCH }}/sevendesk-*.rpm "/workspace/sevendesk-${{ env.VERSION }}-${{ env.ARCH }}.rpm"
             ls -l ./*.rpm
 
+            # Supporto (customers): portable archive, nothing installed. Without
+            # the system service the UI starts the server in its own process
+            # (src/server.rs start_server), so it accepts connections while open.
+            s="SevenDesk-Supporto-${{ env.VERSION }}-${{ env.ARCH }}"
+            cp -r flutter/build/linux/x64/release/bundle "$s"
+            mv "$s/rustdesk" "$s/sevendesk"
+            cp librustdesk-supporto.so "$s/lib/librustdesk.so"
+            strip "$s/lib/librustdesk.so"
+            tar -czf "/workspace/$s.tar.gz" "$s"
+            ls -l ./*.tar.gz
+
       - name: Upload deb
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sevendesk-linux-x86_64-deb
           path: sevendesk-${{ env.VERSION }}-x86_64.deb
           if-no-files-found: error
+          # Carries the server key and the repository is public: keep it briefly.
+          retention-days: 1
+
+      - name: Upload Supporto archive
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sevendesk-linux-x86_64-supporto
+          path: SevenDesk-Supporto-${{ env.VERSION }}-x86_64.tar.gz
+          if-no-files-found: error
+          # Carries the server key and the repository is public: keep it briefly.
+          retention-days: 1
 
       - name: Upload rpm
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -467,6 +498,8 @@ jobs:
           name: sevendesk-linux-x86_64-rpm
           path: sevendesk-${{ env.VERSION }}-x86_64.rpm
           if-no-files-found: error
+          # Carries the server key and the repository is public: keep it briefly.
+          retention-days: 1
 
   build-android:
     name: android aarch64 apk
@@ -671,15 +704,19 @@ jobs:
           name: sevendesk-android-aarch64-apk
           path: dist/*.apk
           if-no-files-found: error
+          # Carries the server key and the repository is public: keep it briefly.
+          retention-days: 1
 
   build-macos:
-    if: github.event_name == 'workflow_dispatch' && inputs.macos
-    name: macos ${{ matrix.job.arch }}
+    name: macos ${{ matrix.job.arch }} (${{ matrix.variant }})
     needs: [generate-bridge]
     runs-on: ${{ matrix.job.os }}
     strategy:
       fail-fast: false
       matrix:
+        # A full build per variant: swapping the dylib afterwards would break
+        # the ad-hoc signature, which Apple silicon requires.
+        variant: [completo, supporto]
         job:
           - {
               target: x86_64-apple-darwin,
@@ -803,6 +840,8 @@ jobs:
           rustc -V
 
       - name: Build rustdesk
+        env:
+          SEVENDESK_VARIANT: ${{ matrix.variant == 'supporto' && 'supporto' || '' }}
         run: |
           if [ "${{ matrix.job.target }}" = "aarch64-apple-darwin" ]; then
             MIN_MACOS_VERSION="12.3"
@@ -818,27 +857,32 @@ jobs:
       - name: Create unsigned dmg
         env:
           ARCH: ${{ matrix.job.arch }}
+          DMG: ${{ matrix.variant == 'supporto' && 'SevenDesk-Supporto' || 'SevenDesk' }}-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg
         run: |
           CREATE_DMG="$(command -v create-dmg)"
           CREATE_DMG="$(readlink -f "$CREATE_DMG")"
           sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
-          create-dmg --icon "${APP_BUNDLE}" 200 190 --hide-extension "${APP_BUNDLE}" --window-size 800 400 --app-drop-link 600 185 "SevenDesk-${VERSION}-${ARCH}.dmg" "./flutter/build/macos/Build/Products/Release/${APP_BUNDLE}"
+          create-dmg --icon "${APP_BUNDLE}" 200 190 --hide-extension "${APP_BUNDLE}" --window-size 800 400 --app-drop-link 600 185 "${DMG}" "./flutter/build/macos/Build/Products/Release/${APP_BUNDLE}"
           ls -l ./*.dmg
 
       - name: Upload unsigned macOS dmg
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: sevendesk-macos-${{ matrix.job.arch }}-dmg
-          path: SevenDesk-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg # can not upload the directory directly or tar.gz, which destroy the link structure
+          name: sevendesk-macos-${{ matrix.job.arch }}-${{ matrix.variant }}-dmg
+          path: SevenDesk-*${{ env.VERSION }}-${{ matrix.job.arch }}.dmg # can not upload the directory directly or tar.gz, which destroy the link structure
           if-no-files-found: error
+          # Carries the server key and the repository is public: keep it briefly.
+          retention-days: 1
 
+  # Published in the private repository 7evenix/sevendesk-dist, not here: the
+  # binaries carry the server key and this repository is public.
   release:
-    name: GitHub release
+    name: Release (sevendesk-dist)
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [build-windows, build-linux, build-android]
+    needs: [build-windows, build-linux, build-android, build-macos]
     runs-on: ubuntu-24.04
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Download build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -846,6 +890,14 @@ jobs:
           pattern: sevendesk-*
           path: dist
           merge-multiple: true
+
+      - name: Check the Sevenix server is compiled in
+        # Without the variable/secret the clients would ship with no server.
+        run: |
+          [ -n "$SEVENDESK_SERVER" ] && [ -n "$SEVENDESK_KEY" ] || { echo "SEVENDESK_SERVER/SEVENDESK_KEY not set"; exit 1; }
+          dpkg-deb -x dist/sevendesk-*.deb deb
+          grep -qaF "$SEVENDESK_KEY" deb/usr/share/sevendesk/lib/librustdesk.so || { echo "server key missing from the Linux build"; exit 1; }
+          rm -rf deb
 
       - name: Checksums
         working-directory: dist
@@ -856,12 +908,16 @@ jobs:
 
       - name: Create release
         env:
-          GH_TOKEN: ${{ github.token }}
+          # Fine-grained token limited to 7evenix/sevendesk-dist, Contents: read and write.
+          GH_TOKEN: ${{ secrets.DIST_TOKEN }}
+          DIST_REPO: 7evenix/sevendesk-dist
           TAG: ${{ github.ref_name }}
         run: |
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+          [ -n "$GH_TOKEN" ] || { echo "DIST_TOKEN not set"; exit 1; }
+          if gh release view "$TAG" --repo "$DIST_REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --repo "$DIST_REPO" --clobber
           else
-            gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" \
-              --verify-tag --title "SevenDesk $TAG" --generate-notes
+            gh release create "$TAG" dist/* --repo "$DIST_REPO" --target main \
+              --title "SevenDesk $TAG" \
+              --notes "Build di https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA (run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)."
           fi

@@ -9,7 +9,7 @@ Assistenza remota di [Sevenix](https://sevenix.it).
 | Variante | Per chi | Build |
 | --- | --- | --- |
 | **SevenDesk** | staff Sevenix: controlla e può essere controllato | Windows, macOS, Linux, Android |
-| **SevenDesk Supporto** | clienti: accetta solo connessioni in entrata, si avvia senza installazione | Windows |
+| **SevenDesk Supporto** | clienti: accetta solo connessioni in entrata, si avvia senza installazione | Windows (`.exe` portabile), macOS (`.dmg`), Linux (`.tar.gz` portabile: si estrae e si lancia `./sevendesk`) |
 
 La variante si sceglie a compile time: `SEVENDESK_VARIANT=supporto` nell'ambiente di
 `cargo build` produce la build Supporto (`src/sevenix.rs`).
@@ -28,10 +28,18 @@ docker run --rm --user "$(id -u):$(id -g)" -v "$PWD/res/sevenix/icons":/tool:ro,
 
 ## Build
 
-`.github/workflows/sevendesk.yml` (manuale o al push di un tag `v*`, che crea la release):
-Windows completo e Supporto, Linux `.deb` e `.rpm` (`res/sevenix/rpm-flutter.spec`), Android arm64. macOS (x86_64/arm64, non firmato) solo
-lanciandolo a mano con `macos=true`: nel repo privato i minuti macOS contano 10×. I `.dmg`
-restano negli artifact del run, non nella release.
+`.github/workflows/sevendesk.yml` (PR, manuale, o push di un tag `v*`, che crea la release nel
+repo **privato** `7evenix/sevendesk-dist`: i binari contengono la chiave del server e questo repo
+è pubblico, quindi qui non si pubblicano, e gli artifact dei run scadono dopo un giorno. La release
+usa il secret `DIST_TOKEN`, un token fine-grained limitato a `sevendesk-dist`, Contents: read and
+write):
+Windows completo e Supporto, Linux `.deb` e `.rpm` (`res/sevenix/rpm-flutter.spec`), Android arm64,
+macOS x86_64/arm64 non firmato.
+
+Host e chiave del server non sono nel sorgente: la CI li passa a `cargo` dalla variabile di
+repository `SEVENDESK_SERVER` e dal secret `SEVENDESK_KEY`, e il job di release verifica che la
+chiave sia nel binario prima di pubblicare. Una build senza (fork, build locale) non usa il server
+Sevenix.
 
 ## Server
 
@@ -39,8 +47,21 @@ restano negli artifact del run, non nella release.
 firewalld decide cosa è raggiungibile. Porte pubbliche: 21115-21117/tcp e 21116/udp.
 Il record `desk.sevenix.it` deve essere DNS-only (Cloudflare non inoltra queste porte).
 
-La coppia di chiavi sta nel volume `sevendesk-data`. La pubblica è compilata nel client:
-se la privata va persa, tutti i client vanno ricompilati. Tienine una copia offline.
+La coppia di chiavi sta nel volume `sevendesk-data` (il backup notturno di Atlas ne tiene una
+copia cifrata). La pubblica è compilata nel client: se la privata va persa, tutti i client vanno
+ricompilati.
+
+Chi può usare il server: hbbs/hbbr partono con `-k _` e rifiutano i client senza la chiave. Il
+server open source non ha login, e la chiave si può estrarre da qualunque binario distribuito:
+filtra i client RustDesk qualsiasi e le build dei fork, non chi la estrae apposta. Nessuno entra
+in un PC senza la sua password (e, con la variante Supporto, senza il click del cliente); il
+rischio è l'uso della banda del relay.
+
+- `server/peers.sh [giorni]` elenca i dispositivi registrati (ID, prima registrazione, IP).
+  ID sconosciuti o un salto nel numero vogliono dire che qualcun altro usa il server.
+- Ruotare la chiave: ferma lo stack, sposta `id_ed25519*` nel volume, riavvia (hbbs ne genera
+  una nuova, letta anche da hbbr), aggiorna il secret `SEVENDESK_KEY`, rilascia una nuova
+  versione e reinstalla i client: quelli vecchi vengono rifiutati.
 
 ## Aggiornare da upstream
 
