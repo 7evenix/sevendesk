@@ -7,23 +7,18 @@
 # flatpak/drm, iOS, web, F-Droid, SBOM, update metadata and every upload to
 # rustdesk infrastructure. Only optional secrets: the Android signing key.
 #
-# Outputs (Windows, Linux and Android are attached to the GitHub release when a v* tag is pushed):
+# Outputs (attached to the GitHub release when a v* tag is pushed):
 #   SevenDesk-<VERSION>-install.exe         Windows, full client (double-click installs)
 #   SevenDesk-Supporto-<VERSION>.exe        Windows, customer support client (runs portable)
 #   sevendesk-<VERSION>-x86_64.deb          Linux (package "sevendesk", repacked by res/sevenix/repack-deb.sh)
 #   sevendesk-<VERSION>-x86_64.rpm          Linux Fedora/RHEL (res/sevenix/rpm-flutter.spec)
 #   SevenDesk-<VERSION>-aarch64[-signed].apk Android
-#   SevenDesk-<VERSION>-<arch>.dmg          macOS x86_64 / aarch64, unsigned: only on manual runs with macos=true, as run artifacts (not in the release)
+#   SevenDesk-<VERSION>-<arch>.dmg          macOS x86_64 / aarch64, unsigned
 
 name: SevenDesk build
 
 on:
   workflow_dispatch:
-    inputs:
-      macos:
-        description: "Build macOS too (private repo: macOS minutes count 10x)"
-        type: boolean
-        default: false
   pull_request:
   push:
     tags:
@@ -45,6 +40,10 @@ env:
   VCPKG_COMMIT_ID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
   # Must match the version in Cargo.toml: build.py names its outputs after it.
   VERSION: "1.5.1"
+  # Sevenix server compiled into the client (src/sevenix.rs); kept out of the
+  # public source. Empty on forks, whose builds then use no Sevenix server.
+  SEVENDESK_SERVER: ${{ vars.SEVENDESK_SERVER }}
+  SEVENDESK_KEY: ${{ secrets.SEVENDESK_KEY }}
   NDK_VERSION: "r28c"
 
 jobs:
@@ -361,6 +360,8 @@ jobs:
           dockerRunArgs: |
             --volume "${PWD}:/workspace"
             --volume "/opt/artifacts:/opt/artifacts"
+            --env SEVENDESK_SERVER
+            --env SEVENDESK_KEY
           shell: /bin/bash
           install: |
             apt-get update -y
@@ -673,7 +674,6 @@ jobs:
           if-no-files-found: error
 
   build-macos:
-    if: github.event_name == 'workflow_dispatch' && inputs.macos
     name: macos ${{ matrix.job.arch }}
     needs: [generate-bridge]
     runs-on: ${{ matrix.job.os }}
@@ -835,7 +835,7 @@ jobs:
   release:
     name: GitHub release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [build-windows, build-linux, build-android]
+    needs: [build-windows, build-linux, build-android, build-macos]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -846,6 +846,14 @@ jobs:
           pattern: sevendesk-*
           path: dist
           merge-multiple: true
+
+      - name: Check the Sevenix server is compiled in
+        # Without the variable/secret the clients would ship with no server.
+        run: |
+          [ -n "$SEVENDESK_SERVER" ] && [ -n "$SEVENDESK_KEY" ] || { echo "SEVENDESK_SERVER/SEVENDESK_KEY not set"; exit 1; }
+          dpkg-deb -x dist/sevendesk-*.deb deb
+          grep -qaF "$SEVENDESK_KEY" deb/usr/share/sevendesk/lib/librustdesk.so || { echo "server key missing from the Linux build"; exit 1; }
+          rm -rf deb
 
       - name: Checksums
         working-directory: dist
